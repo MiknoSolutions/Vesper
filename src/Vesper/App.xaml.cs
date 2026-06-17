@@ -35,6 +35,7 @@ public partial class App : Application
             var mainWindow = new MainWindow(mainVm);
             MainWindow = mainWindow;
             mainWindow.Show();
+            mainWindow.StartInTray();
         }
         catch (Exception ex)
         {
@@ -64,6 +65,7 @@ public partial class App : Application
                 var mainWindow = new MainWindow(mainVm);
                 MainWindow = mainWindow;
                 mainWindow.Show();
+                mainWindow.StartInTray();
             }
             catch (Exception ex2)
             {

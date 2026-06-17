@@ -1,6 +1,7 @@
 using System.IO;
 using System.Text.Json;
 using System.Threading.Channels;
+using Google.Apis.Auth.OAuth2;
 using Google.Cloud.Speech.V2;
 using Google.Protobuf;
 
@@ -30,6 +31,12 @@ public sealed class GoogleCloudSpeechService : ISpeechRecognitionService
 
     public void Configure(string credentialsPath, string? projectId = null, string model = "chirp_2")
     {
+        if (string.IsNullOrWhiteSpace(credentialsPath))
+            throw new ArgumentException("Google credentials path is empty.", nameof(credentialsPath));
+
+        if (!File.Exists(credentialsPath))
+            throw new FileNotFoundException("Google credentials file not found.", credentialsPath);
+
         _credentialsPath = credentialsPath;
         _model = string.IsNullOrWhiteSpace(model) ? "chirp_2" : model;
 
@@ -47,13 +54,16 @@ public sealed class GoogleCloudSpeechService : ISpeechRecognitionService
             return;
         }
 
-        var endpoint = _location == "global"
-            ? SpeechClient.DefaultEndpoint.ToString()
-            : $"{_location}-speech.googleapis.com";
+        ValidateCredentialsFile(credentialsPath);
+
+        var credential = CredentialFactory
+            .FromFile<ServiceAccountCredential>(credentialsPath)
+            .ToGoogleCredential()
+            .CreateScoped("https://www.googleapis.com/auth/cloud-platform");
 
         _client = new SpeechClientBuilder
         {
-            CredentialsPath = credentialsPath,
+            GoogleCredential = credential,
             Endpoint = _location == "global" ? null : $"{_location}-speech.googleapis.com:443"
         }.Build();
 
@@ -286,6 +296,31 @@ public sealed class GoogleCloudSpeechService : ISpeechRecognitionService
             DiagnosticLogger.Log($"GoogleCloud: failed to read project_id from credentials: {ex.Message}");
         }
         return string.Empty;
+    }
+
+    private static void ValidateCredentialsFile(string path)
+    {
+        try
+        {
+            var json = File.ReadAllText(path);
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+
+            var type = root.TryGetProperty("type", out var typeProp) ? typeProp.GetString() : null;
+            var hasPrivateKey = root.TryGetProperty("private_key", out var keyProp)
+                && keyProp.ValueKind == JsonValueKind.String
+                && !string.IsNullOrWhiteSpace(keyProp.GetString());
+            var hasClientEmail = root.TryGetProperty("client_email", out var emailProp)
+                && emailProp.ValueKind == JsonValueKind.String
+                && !string.IsNullOrWhiteSpace(emailProp.GetString());
+
+            if (type != "service_account" || !hasPrivateKey || !hasClientEmail)
+                throw new InvalidOperationException("Google credentials JSON is not a valid service account key.");
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidOperationException($"Google credentials JSON is malformed: {ex.Message}", ex);
+        }
     }
 
     public void Dispose()

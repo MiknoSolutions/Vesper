@@ -46,3 +46,15 @@ models/*.bin
 
 ## App settings (user-specific)
 settings.json
+
+## Release artifacts
+release/*.zip
+release/*.sha256
+release/Vesper-portable-win-x64/
+
+## Credentials and secrets
+*google-credentials*.json
+*service-account*.json
+*credentials*.json
+*.secrets.json
+vesper-*-*.json

@@ -35,6 +35,18 @@ Lightweight, portable Windows desktop application for **speech-to-text** recogni
 4. Choose a recognition mode (Toggle / Push-to-Talk / Continuous)
 5. Click in any text field, press your hotkey, and speak
 
+## Google Cloud For End Users
+
+If you use Google Cloud Speech-to-Text, every user should provide their own credentials.
+
+1. In Google Cloud Console, create a service account with Speech-to-Text access.
+2. Download its JSON key file.
+3. In Vesper: Settings -> Speech Backend -> Google Cloud Speech-to-Text -> Browse...
+4. Select the JSON file.
+
+Vesper copies that file into the current Windows user's AppData folder and stores only the local path in settings.
+Do not ship your own production key inside the repository or releases.
+
 ## Building from Source
 
 ```bash
@@ -50,6 +62,18 @@ dotnet publish Vesper/Vesper.csproj -c Release -r win-x64 --self-contained
 ```
 
 The output will be in `src/Vesper/bin/Release/net8.0-windows/win-x64/publish/`.
+
+## Release Packaging
+
+1. Build portable executable:
+  - `powershell -ExecutionPolicy Bypass -File scripts/build-portable.ps1`
+2. Create release zip and checksum:
+  - `powershell -ExecutionPolicy Bypass -File scripts/package-release.ps1 -Version v1.0.0`
+3. Upload files from `release/` to GitHub Releases.
+
+Templates and user docs:
+- `docs/RELEASE_NOTES_TEMPLATE.md`
+- `docs/END_USER_GUIDE.md`
 
 ## Tech Stack
 
@@ -70,6 +94,14 @@ src/Vesper/
 ├── ViewModels/      — MVVM view models
 ├── Views/           — Settings window
 └── Helpers/         — P/Invoke, XAML converters
+
+scripts/
+├── build-portable.ps1
+└── package-release.ps1
+
+docs/
+├── END_USER_GUIDE.md
+└── RELEASE_NOTES_TEMPLATE.md
 ```
 
 ## License

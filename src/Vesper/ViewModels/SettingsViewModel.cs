@@ -1,4 +1,6 @@
 using System.Collections.ObjectModel;
+using System.IO;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Input;
 using Vesper.Models;
@@ -238,11 +240,14 @@ public class SettingsViewModel : ViewModelBase
 
     public string ImportCredentialsFile(string sourcePath)
     {
-        var dir = GoogleCloudCredentialsDir;
-        System.IO.Directory.CreateDirectory(dir);
+        if (!TryValidateGoogleCredentialsFile(sourcePath, out var validationError))
+            throw new InvalidOperationException(validationError);
 
-        var dest = System.IO.Path.Combine(dir, "google-credentials.json");
-        System.IO.File.Copy(sourcePath, dest, overwrite: true);
+        var dir = GoogleCloudCredentialsDir;
+        Directory.CreateDirectory(dir);
+
+        var dest = Path.Combine(dir, "google-credentials.json");
+        File.Copy(sourcePath, dest, overwrite: true);
 
         GoogleCloudCredentialsPath = dest;
         return dest;
@@ -315,6 +320,31 @@ public class SettingsViewModel : ViewModelBase
 
     private void Save()
     {
+        Saved = false;
+
+        if (Backend == WhisperBackend.GoogleCloud)
+        {
+            if (string.IsNullOrWhiteSpace(GoogleCloudCredentialsPath))
+            {
+                MessageBox.Show(
+                    "Please import Google Cloud credentials JSON before saving.",
+                    "Vesper — Validation",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                return;
+            }
+
+            if (!TryValidateGoogleCredentialsFile(GoogleCloudCredentialsPath, out var validationError))
+            {
+                MessageBox.Show(
+                    validationError,
+                    "Vesper — Invalid Google Credentials",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                return;
+            }
+        }
+
         _settings.Backend = Backend;
         _settings.ApiKey = ApiKey;
         _settings.SelectedModelId = SelectedModel.Id;
@@ -338,6 +368,78 @@ public class SettingsViewModel : ViewModelBase
 
         _settingsService.Save(_settings);
         Saved = true;
+    }
+
+    private static bool TryValidateGoogleCredentialsFile(string path, out string error)
+    {
+        error = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            error = "Credentials file path is empty.";
+            return false;
+        }
+
+        if (!File.Exists(path))
+        {
+            error = "Credentials file does not exist.";
+            return false;
+        }
+
+        try
+        {
+            var json = File.ReadAllText(path);
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+
+            if (!TryGetRequiredString(root, "type", out var type) || type != "service_account")
+            {
+                error = "Invalid credentials: type must be 'service_account'.";
+                return false;
+            }
+
+            if (!TryGetRequiredString(root, "project_id", out _))
+            {
+                error = "Invalid credentials: missing 'project_id'.";
+                return false;
+            }
+
+            if (!TryGetRequiredString(root, "client_email", out _))
+            {
+                error = "Invalid credentials: missing 'client_email'.";
+                return false;
+            }
+
+            if (!TryGetRequiredString(root, "private_key", out var privateKey) || !privateKey.Contains("BEGIN PRIVATE KEY"))
+            {
+                error = "Invalid credentials: missing or malformed 'private_key'.";
+                return false;
+            }
+
+            if (!TryGetRequiredString(root, "token_uri", out _))
+            {
+                error = "Invalid credentials: missing 'token_uri'.";
+                return false;
+            }
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            error = $"Credentials file is not a valid JSON service account key: {ex.Message}";
+            return false;
+        }
+    }
+
+    private static bool TryGetRequiredString(JsonElement root, string property, out string value)
+    {
+        value = string.Empty;
+
+        if (!root.TryGetProperty(property, out var element) || element.ValueKind != JsonValueKind.String)
+            return false;
+
+        value = element.GetString() ?? string.Empty;
+        return !string.IsNullOrWhiteSpace(value);
     }
 
     private async void DownloadModel()

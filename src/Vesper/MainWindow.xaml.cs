@@ -69,6 +69,7 @@ public partial class MainWindow : Window
     {
         if (WindowState == WindowState.Minimized)
         {
+            ShowInTaskbar = false;
             Hide();
         }
     }
@@ -88,6 +89,7 @@ public partial class MainWindow : Window
 
     private void MinimizeToTray_Click(object sender, RoutedEventArgs e)
     {
+        ShowInTaskbar = false;
         Hide();
     }
 
@@ -129,8 +131,15 @@ public partial class MainWindow : Window
 
     public void ShowWindow()
     {
+        ShowInTaskbar = true;
         Show();
         WindowState = WindowState.Normal;
         Activate();
+    }
+
+    public void StartInTray()
+    {
+        ShowInTaskbar = false;
+        Hide();
     }
 }
